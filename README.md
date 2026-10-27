@@ -4,7 +4,7 @@ Colección de automatizaciones desarrolladas con **n8n**, integrando inteligenci
 
 ## 1. Procesamiento automatizado de facturas con IA
 
-![Workflow de facturación](n8n AI automatizations/images/facturacion.png)
+![Workflow de facturación](n8n-AI-automatizations/images/facturacion.png)
 
 Sistema de automatización para procesar facturas de dos proveedores con formatos diferentes.
 
