@@ -4,7 +4,7 @@ Colección de automatizaciones desarrolladas con **n8n**, integrando inteligenci
 
 ## 1. Procesamiento automatizado de facturas con IA
 
-![Workflow de facturación](n8n-AI-automatizations/images/facturacion.png)
+![Workflow de facturación](images/facturacion.png)
 
 Sistema de automatización para procesar facturas de dos proveedores con formatos diferentes.
 
@@ -18,12 +18,12 @@ Sistema de automatización para procesar facturas de dos proveedores con formato
 **Tecnologías:** n8n, OpenAI API, JavaScript, Gmail, Google Sheets y Google Drive.
 
 **Workflows:**
-- [Proveedor A](n8n AI automatizations/workflows/Procesado_facturas_PROVEEDOR_A_PUBLICO.json)
-- [Proveedor B](n8n AI automatizations/workflows/Procesado_facturas_PROVEEDOR_B_PUBLICO.json)
+- [Proveedor A](workflows/Procesado_facturas_PROVEEDOR_A_PUBLICO.json)
+- [Proveedor B](workflows/Procesado_facturas_PROVEEDOR_B_PUBLICO.json)
 
 ## 2. PlebeYo — Asistente personal con IA
 
-![Workflow de PlebeYo](n8n AI automatizations/images/plebeyo.png)
+![Workflow de PlebeYo](images/plebeyo.png)
 
 Agente de inteligencia artificial desarrollado con n8n y accesible mediante Telegram, diseñado para gestionar diferentes servicios desde una única interfaz conversacional.
 
@@ -38,7 +38,7 @@ Agente de inteligencia artificial desarrollado con n8n y accesible mediante Tele
 **Tecnologías:** n8n, OpenAI API, Telegram Bot API, Google APIs y agentes de IA.
 
 **Workflow:**
-- [PlebeYo](n8n AI automatizations/workflows/PlebeYo_PUBLICO.json)
+- [PlebeYo](workflows/PlebeYo_PUBLICO.json)
 
 ## Seguridad y privacidad
 
