@@ -1,0 +1,39 @@
+# Credenciales y secretos
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+
+# Datos privados y copias originales
+private/
+originals/
+backups/
+*_PRIVADO.json
+*_ORIGINAL.json
+
+# Archivos temporales
+*.log
+*.tmp
+*.bak
+*~
+*.swp
+
+# Python
+__pycache__/
+.venv/
+venv/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+
+# Dependencias
+node_modules/

@@ -1,0 +1,804 @@
+{
+  "name": "Procesamiento de facturas - PROVEEDOR_B",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "maxResults": 1,
+        "filters": {
+          "q": "from:proveedor-b@example.com subject:FACTURA has:attachment filename:pdf"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -352,
+        288
+      ],
+      "id": "0db3154e-886a-444e-85b6-937679353e4f",
+      "name": "Gmail Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "binaryPropertyName": "attachment_0",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        288
+      ],
+      "id": "f89b6f1a-1152-4195-8bd2-9374e2bd776b",
+      "name": "Subir PDF a OpenAI"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "Analiza visualmente el PDF adjunto y extrae los datos de la factura.\n\nLee la tabla respetando la posición de cada columna. No reconstruyas los datos\núnicamente a partir del texto plano y no inventes valores.\n\n- Extrae codigo_cliente del campo \"CODI CLIENT\".\n- Extrae forma_pago exactamente como aparece en la factura, incluyendo el plazo si aparece.\n- No inventes ninguno de estos valores.\n- Extrae el importe de IBEE si aparece. Si no aparece, devuelve 0.\n- Extrae el importe de PUNT VERD si aparece. Si no aparece, devuelve 0.\n- Extrae el importe de RADIAL si aparece. Si no aparece, devuelve 0.\n- Si una celda de PREU, IMP DTE o IMPORT está vacía en la factura, devuelve 0.\n- Nunca uses el valor de QUANT o CAIXES para completar PREU o IMPORT.\n- No deduzcas ni inventes valores numéricos que no aparezcan explícitamente.\n- Respeta estrictamente la posición de cada valor según las columnas de la tabla.\n\nDevuelve exclusivamente un JSON válido con esta estructura:\n\n{\n  \"numero_factura\": \"\",\n  \"codigo_cliente\": \"\",\n  \"forma_pago\": \"\",\n  \"fecha_factura\": \"\",\n  \"fecha_vencimiento\": \"\",\n  \"proveedor\": \"\",\n  \"nif_proveedor\": \"\",\n  \"cliente\": \"\",\n  \"ibee\": 0,\n  \"punto_verde\": 0,\n  \"radial\": 0,\n  \"base_imponible\": 0,\n  \"impuestos\": 0,\n  \"total_factura\": 0,\n  \"articulos\": [\n    {\n      \"codigo_articulo\": \"\",\n      \"descripcion\": \"\",\n      \"albaran\": \"\",\n      \"cajas\": 0,\n      \"cantidad\": 0,\n      \"precio\": 0,\n      \"importe_descuento\": 0,\n      \"importe\": 0,\n      \"iva_porcentaje\": 0\n    }\n  ]\n}"
+            },
+            {
+              "type": "file",
+              "fileType": "fileId",
+              "fileId": "={{ $json.id }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        32,
+        288
+      ],
+      "id": "14cb35a4-d057-45de-8f05-be919b0c3a56",
+      "name": "Extraer datos factura"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $json.output?.[0]?.content?.[0]?.text;\n\nif (!raw) {\n  throw new Error('No se encontró la respuesta del modelo');\n}\n\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/```$/i, '')\n  .trim();\n\nconst data = JSON.parse(cleaned);\n\n// Aseguramos que articulos sea un array\nif (!Array.isArray(data.articulos)) {\n  data.articulos = [];\n}\n\nconst extras = [\n  {\n    campo: 'ibee',\n    codigo: 'IBEE',\n    descripcion: 'IBEE',\n  },\n  {\n    campo: 'punto_verde',\n    codigo: 'PUNT_VERD',\n    descripcion: 'PUNT VERD',\n  },\n  {\n    campo: 'radial',\n    codigo: 'RADIAL',\n    descripcion: 'RADIAL',\n  },\n];\n\nfor (const extra of extras) {\n  const importe = Number(data[extra.campo] ?? 0);\n\n  const yaExiste = data.articulos.some(\n    articulo => articulo.codigo_articulo === extra.codigo\n  );\n\n  if (importe > 0 && !yaExiste) {\n    data.articulos.push({\n      codigo_articulo: extra.codigo,\n      descripcion: extra.descripcion,\n      albaran: '—',\n      cajas: null,\n      cantidad: null,\n      precio: null,\n      importe_descuento: null,\n      importe: importe,\n      iva_porcentaje: 21,\n    });\n  }\n}\n\ndelete data.ibee;\ndelete data.punto_verde;\ndelete data.radial;\n\nreturn {\n  json: data,\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        288
+      ],
+      "id": "b86dca9c-d1ac-424a-9b1a-34cd807d159e",
+      "name": "Procesar JSON factura"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "articulos",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -336,
+        512
+      ],
+      "id": "3171dc3d-8259-4625-847c-18b2d355c320",
+      "name": "Separar artículos"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id",
+          "cachedResultName": "Sample account mapping sheet"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "listado articulos PROVEEDOR_B",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "codigo",
+              "lookupValue": "={{ $json.articulos.codigo_articulo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -160,
+        512
+      ],
+      "id": "c74ae8ec-051c-4cc7-9b7d-d9113e585dbb",
+      "name": "Buscar cuenta del artículo"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "01251cb0-17b9-44fd-acac-7edd439fa597",
+              "name": "=codigo_articulo",
+              "value": "={{ $('Separar artículos').item.json.articulos.codigo_articulo }}",
+              "type": "string"
+            },
+            {
+              "id": "2215740c-8273-497d-9e06-5edf1ae6abad",
+              "name": "=descripcion",
+              "value": "={{ $('Separar artículos').item.json.articulos.descripcion }}",
+              "type": "string"
+            },
+            {
+              "id": "2461789a-af21-47d3-bdb2-2392d3ceac07",
+              "name": "=cantidad",
+              "value": "={{ $('Separar artículos').item.json.articulos.cantidad }}",
+              "type": "number"
+            },
+            {
+              "id": "f013c33a-c5e0-4d4c-8918-7500cce76a1a",
+              "name": "=importe",
+              "value": "={{ $('Separar artículos').item.json.articulos.importe }}",
+              "type": "number"
+            },
+            {
+              "id": "26cba0e2-b3b1-4930-8436-05f7243461ff",
+              "name": "=nombre_cuenta",
+              "value": "={{ $json[\"nombre cuenta\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "4844e001-5183-42df-9318-66d1c44d952a",
+              "name": "=cuenta_contable",
+              "value": "={{ $json[\"nº cta\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "c1fadcc2-c3b5-4ebc-acf8-e56392473433",
+              "name": "=albaran",
+              "value": "={{ $('Separar artículos').item.json.articulos.albaran }}",
+              "type": "string"
+            },
+            {
+              "id": "3f3b1906-931e-4a3d-918c-11c53be442ac",
+              "name": "=cajas",
+              "value": "={{ $('Separar artículos').item.json.articulos.cajas }}",
+              "type": "number"
+            },
+            {
+              "id": "f6fd8eb9-ba45-482f-b9fe-fb8a5048065c",
+              "name": "=precio",
+              "value": "={{ $('Separar artículos').item.json.articulos.precio }}",
+              "type": "number"
+            },
+            {
+              "id": "9cf2bc01-9113-4f8e-abaf-a58902a37392",
+              "name": "=importe_descuento",
+              "value": "={{ $('Separar artículos').item.json.articulos.importe_descuento }}",
+              "type": "number"
+            },
+            {
+              "id": "5ed2e5d8-683c-4ad5-897b-29e644320d5e",
+              "name": "=iva_porcentaje",
+              "value": "={{ $('Separar artículos').item.json.articulos.iva_porcentaje }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        32,
+        512
+      ],
+      "id": "fa16c699-656b-4879-bee8-978ea73f587f",
+      "name": "Preparar datos del artículo"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resumen = {};\n\nfor (const item of $input.all()) {\n  const cuenta = String(item.json.cuenta_contable);\n  const nombre = item.json.nombre_cuenta;\n  const importe = Number(item.json.importe ?? 0);\n\n  if (!resumen[cuenta]) {\n    resumen[cuenta] = {\n      cuenta_contable: cuenta,\n      nombre_cuenta: nombre,\n      importe_total: 0,\n    };\n  }\n\n  resumen[cuenta].importe_total += importe;\n}\n\nreturn Object.values(resumen).map((fila) => ({\n  json: {\n    ...fila,\n    importe_total: Number(fila.importe_total.toFixed(2)),\n  },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        512
+      ],
+      "id": "30761f0b-addb-49cf-b4e6-4867abaceb3a",
+      "name": "Agrupar importes por cuenta"
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_TEMPLATE_FILE_ID",
+          "mode": "id",
+          "cachedResultName": "Sample invoice template"
+        },
+        "name": "={{ $('Procesar JSON factura').first().json.fecha_factura.split('/').reverse().join('').slice(2) }}_035_FRA.{{ $('Procesar JSON factura').first().json.numero_factura.replace(/\\D/g, '').slice(-8) }}_PROVEEDOR_B",
+        "sameFolder": false,
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DESTINATION_FOLDER_ID",
+          "mode": "id",
+          "cachedResultName": "Output folder"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -336,
+        704
+      ],
+      "id": "129e62ef-6eaa-4169-884f-05264eaa712f",
+      "name": "Crear factura desde plantilla",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const spreadsheetId = $input.first().json.id;\nconst articulos = $('Preparar datos del artículo').all();\n\nreturn articulos.map(item => ({\n  json: {\n    ...item.json,\n    spreadsheet_id: spreadsheetId\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        704
+      ],
+      "id": "31fb8ee5-a17c-42e5-ad9f-2ffec4641d52",
+      "name": "Preparar detalle factura"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Detalle Factura",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ART": "={{ $json.codigo_articulo }}",
+            "DESCRIPCIÓ ARTICLE": "={{ $json.descripcion }}",
+            "ALBARÀ": "={{ $json.albaran }}",
+            "CAIXES": "={{ $json.cajas }}",
+            "QUANT": "={{ $json.cantidad }}",
+            "PREU (€)": "={{ $json.precio }}",
+            "IMP DTE (€)": "={{ $json.importe_descuento }}",
+            "IMPORT (€)": "={{ $json.importe }}",
+            "%IVA": "={{ $json.iva_porcentaje }}",
+            "Nº CTA COMPTABLE": "={{ $json.cuenta_contable }}",
+            "DESCRIPCIÓ COMPTABLE": "={{ $json.nombre_cuenta }}"
+          },
+          "matchingColumns": [
+            "Proveedor:"
+          ],
+          "schema": [
+            {
+              "id": "ART",
+              "displayName": "ART",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "DESCRIPCIÓ ARTICLE",
+              "displayName": "DESCRIPCIÓ ARTICLE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ALBARÀ",
+              "displayName": "ALBARÀ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "CAIXES",
+              "displayName": "CAIXES",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "QUANT",
+              "displayName": "QUANT",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "PREU (€)",
+              "displayName": "PREU (€)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IMP DTE (€)",
+              "displayName": "IMP DTE (€)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IMPORT (€)",
+              "displayName": "IMPORT (€)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "%IVA",
+              "displayName": "%IVA",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nº CTA COMPTABLE",
+              "displayName": "Nº CTA COMPTABLE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "DESCRIPCIÓ COMPTABLE",
+              "displayName": "DESCRIPCIÓ COMPTABLE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "locationDefine": {
+            "values": {
+              "headerRow": 7
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        64,
+        704
+      ],
+      "id": "26247a72-fca0-409f-8c18-69c5212728f1",
+      "name": "Escribir detalle factura"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Crear factura desde plantilla').first().json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Datos Factura",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "proveedor": "={{ $('Procesar JSON factura').first().json.proveedor }}",
+            "nif_proveedor": "={{ $('Procesar JSON factura').first().json.nif_proveedor }}",
+            "cliente": "={{ $('Procesar JSON factura').first().json.cliente }}",
+            "codigo_cliente": "={{ $('Procesar JSON factura').first().json.codigo_cliente }}",
+            "numero_factura": "={{ $('Procesar JSON factura').first().json.numero_factura }}",
+            "fecha_factura": "={{ $('Procesar JSON factura').first().json.fecha_factura }}",
+            "fecha_vencimiento": "={{ $('Procesar JSON factura').first().json.fecha_vencimiento }}",
+            "forma_pago": "={{ $('Procesar JSON factura').first().json.forma_pago }}",
+            "total_factura": "={{ $('Procesar JSON factura').first().json.total_factura }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "proveedor",
+              "displayName": "proveedor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nif_proveedor",
+              "displayName": "nif_proveedor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cliente",
+              "displayName": "cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "codigo_cliente",
+              "displayName": "codigo_cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "numero_factura",
+              "displayName": "numero_factura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_factura",
+              "displayName": "fecha_factura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_vencimiento",
+              "displayName": "fecha_vencimiento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "forma_pago",
+              "displayName": "forma_pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_factura",
+              "displayName": "total_factura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        288,
+        704
+      ],
+      "id": "c0417c71-f293-4647-8142-5ecb0c5b1264",
+      "name": "Escribir datos generales",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const spreadsheetId = $input.first().json.id;\nconst resumen = $('Agrupar importes por cuenta').all();\n\nreturn resumen.map(item => ({\n  json: {\n    ...item.json,\n    spreadsheet_id: spreadsheetId\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        880
+      ],
+      "id": "d507255c-ffed-4731-9f2d-680747971832",
+      "name": "Preparar resumen contable"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Resum Comptes",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "BASE IMPONIBLE (€)": "={{ $json.importe_total }}",
+            "Nº COMPTE": "={{ $json.cuenta_contable }}",
+            "DESCRIPCIÓ COMPTABLE": "={{ $json.nombre_cuenta }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Nº COMPTE",
+              "displayName": "Nº COMPTE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "DESCRIPCIÓ COMPTABLE",
+              "displayName": "DESCRIPCIÓ COMPTABLE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "BASE IMPONIBLE (€)",
+              "displayName": "BASE IMPONIBLE (€)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "locationDefine": {
+            "values": {
+              "headerRow": 5
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        64,
+        880
+      ],
+      "id": "3f78cc4c-ea1c-4fa3-9378-e8976681928b",
+      "name": "Escribir resumen contable"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Subir PDF a OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir PDF a OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Extraer datos factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer datos factura": {
+      "main": [
+        [
+          {
+            "node": "Procesar JSON factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar JSON factura": {
+      "main": [
+        [
+          {
+            "node": "Separar artículos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar artículos": {
+      "main": [
+        [
+          {
+            "node": "Buscar cuenta del artículo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar cuenta del artículo": {
+      "main": [
+        [
+          {
+            "node": "Preparar datos del artículo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar datos del artículo": {
+      "main": [
+        [
+          {
+            "node": "Agrupar importes por cuenta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar importes por cuenta": {
+      "main": [
+        [
+          {
+            "node": "Crear factura desde plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear factura desde plantilla": {
+      "main": [
+        [
+          {
+            "node": "Preparar detalle factura",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar resumen contable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar detalle factura": {
+      "main": [
+        [
+          {
+            "node": "Escribir detalle factura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escribir detalle factura": {
+      "main": [
+        [
+          {
+            "node": "Escribir datos generales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar resumen contable": {
+      "main": [
+        [
+          {
+            "node": "Escribir resumen contable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}
